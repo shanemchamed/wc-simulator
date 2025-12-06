@@ -13,6 +13,7 @@
             background-color: #050505; 
             color: white;
             overflow-x: hidden;
+            user-select: none; /* Prevent text selection during drag */
         }
 
         /* --- Utilities --- */
@@ -32,13 +33,21 @@
         .group-card:hover { border-color: #555; }
 
         .team-row {
-            cursor: pointer;
+            cursor: grab; /* Drag cursor */
             transition: all 0.2s;
         }
+        .team-row:active { cursor: grabbing; }
         .team-row:hover { background: rgba(255,255,255,0.05); }
-        .team-row.selected-swap {
-            background: rgba(204, 255, 0, 0.2);
-            border-left: 2px solid #ccff00;
+        
+        /* Drag & Drop Visuals */
+        .team-row.dragging {
+            opacity: 0.5;
+            background: #333;
+            border: 1px dashed #666;
+        }
+        .team-row.drag-over {
+            background: rgba(204, 255, 0, 0.1);
+            border-top: 2px solid #ccff00;
         }
 
         .pos-badge {
@@ -63,6 +72,13 @@
         .bracket-team-card.selected { background: #ccff00; color: black; font-weight: bold; box-shadow: 0 0 15px #ccff00; }
         .winner-final { background: linear-gradient(45deg, #FFD700, #ccff00); color: black; transform: scale(1.1); }
         
+        /* Nav */
+        .nav-step { cursor: pointer; transition: all 0.3s; opacity: 0.6; }
+        .nav-step:hover { opacity: 1; }
+        .nav-step.active { opacity: 1; }
+        .nav-step.active span:first-child { border-color: #ccff00; color: #ccff00; }
+        .nav-step.active span:last-child { color: #ccff00; }
+
         /* Animation */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
@@ -76,16 +92,20 @@
         <h1 class="text-2xl md:text-4xl font-black text-white mb-2 italic">TOURNAMENT <span class="text-[#ccff00]">SIMULATOR</span></h1>
         
         <!-- Navigation / Status -->
-        <div class="flex justify-center space-x-4 mt-4" id="nav-steps">
-            <div id="step-groups" class="flex items-center space-x-2 text-[#ccff00]">
-                <span class="w-6 h-6 rounded-full border border-[#ccff00] flex items-center justify-center text-xs font-bold">1</span>
-                <span class="text-xs font-bold tracking-wider">GROUP STAGE</span>
+        <div class="flex justify-center space-x-4 mt-4 select-none" id="nav-steps">
+            <div id="step-groups" class="nav-step flex items-center space-x-2 active" onclick="switchToGroups()">
+                <span class="w-6 h-6 rounded-full border border-gray-600 flex items-center justify-center text-xs font-bold transition-colors">1</span>
+                <span class="text-xs font-bold tracking-wider transition-colors">GROUP STAGE</span>
             </div>
             <div class="w-8 h-px bg-gray-700 my-auto"></div>
-            <div id="step-bracket" class="flex items-center space-x-2 text-gray-600">
-                <span class="w-6 h-6 rounded-full border border-gray-600 flex items-center justify-center text-xs font-bold">2</span>
-                <span class="text-xs font-bold tracking-wider">KNOCKOUT</span>
+            <div id="step-bracket" class="nav-step flex items-center space-x-2" onclick="generateBracket()">
+                <span class="w-6 h-6 rounded-full border border-gray-600 flex items-center justify-center text-xs font-bold transition-colors">2</span>
+                <span class="text-xs font-bold tracking-wider transition-colors">KNOCKOUT</span>
             </div>
+        </div>
+        
+        <div class="text-center mt-2 h-4">
+             <span id="save-status" class="text-[10px] text-gray-600 font-mono opacity-0 transition-opacity">SAVED</span>
         </div>
     </header>
 
@@ -160,9 +180,9 @@
             'nz': { name: 'New Zealand', code: 'nz' }
         };
 
-        // --- 2. INITIAL GROUP STATE (Simulated Draw) ---
-        // 12 Groups of 4
-        let groupState = {
+        // --- 2. STATE MANAGEMENT & STORAGE ---
+        
+        const defaultGroupState = {
             'A': ['es', 'hr', 'qa', 'nz'],
             'B': ['it', 'ch', 'ng', 'jm'],
             'C': ['fr', 'ua', 'kr', 'pa'],
@@ -171,33 +191,86 @@
             'F': ['be', 'at', 'dz', 'sc'],
             'G': ['br', 'rs', 'sn', 'hu'],
             'H': ['nl', 'co', 'jp', 'se'],
-            'I': ['gb-eng', 'us', 'tn', 'cz'], // USA host path
-            'J': ['ar', 'mx', 'cm', 'tr'], // Mexico host path
-            'K': ['pt', 'ca', 'eg', 'pe'], // Canada host path
+            'I': ['gb-eng', 'us', 'tn', 'cz'], 
+            'J': ['ar', 'mx', 'cm', 'tr'], 
+            'K': ['pt', 'ca', 'eg', 'pe'], 
             'L': ['uy', 'au', 'cl', 'py']
         };
 
-        // Track user interaction
-        let swapSource = null; // { group: 'A', index: 0 }
-        let bracketState = {}; // Stores winners of knockout matches
+        let groupState = {};
+        let bracketState = {}; 
+        let currentView = 'groups'; // 'groups' or 'bracket'
+
+        // Load or Init
+        function loadState() {
+            const savedGroups = localStorage.getItem('wc26_groups');
+            const savedBracket = localStorage.getItem('wc26_bracket');
+            const savedView = localStorage.getItem('wc26_view');
+
+            if (savedGroups) {
+                groupState = JSON.parse(savedGroups);
+            } else {
+                groupState = JSON.parse(JSON.stringify(defaultGroupState)); // Deep copy
+            }
+
+            if (savedBracket) {
+                bracketState = JSON.parse(savedBracket);
+            }
+
+            if (savedView) {
+                currentView = savedView;
+            }
+        }
+
+        function saveEverything() {
+            localStorage.setItem('wc26_groups', JSON.stringify(groupState));
+            localStorage.setItem('wc26_bracket', JSON.stringify(bracketState));
+            localStorage.setItem('wc26_view', currentView);
+            
+            // Visual feedback
+            const status = document.getElementById('save-status');
+            status.style.opacity = '1';
+            setTimeout(() => { status.style.opacity = '0'; }, 1000);
+        }
 
         // --- 3. INIT ---
         const contentDiv = document.getElementById('app-content');
         const actionBtn = document.getElementById('action-btn');
 
         function init() {
-            renderGroupStage();
-            actionBtn.classList.remove('hidden');
-            actionBtn.onclick = generateBracket;
+            loadState();
+            if (currentView === 'bracket') {
+                generateBracket(); // This renders the bracket view
+            } else {
+                switchToGroups(); // This renders the group view
+            }
         }
 
-        // --- 4. VIEW: GROUP STAGE ---
+        function switchToGroups() {
+            currentView = 'groups';
+            saveEverything();
+            
+            // UI Update
+            document.getElementById('step-groups').classList.add('active');
+            document.getElementById('step-bracket').classList.remove('active');
+            actionBtn.classList.remove('hidden');
+            actionBtn.onclick = generateBracket;
+
+            renderGroupStage();
+        }
+
+        // --- 4. VIEW: GROUP STAGE (Drag & Drop) ---
+        
+        let dragSrcEl = null;
+        let dragSrcGroup = null;
+        let dragSrcIndex = null;
+
         function renderGroupStage() {
             contentDiv.innerHTML = `
                 <div class="text-center mb-8 fade-in">
                     <p class="text-gray-400 text-sm max-w-lg mx-auto">
-                        <span class="text-[#ccff00]">INSTRUCTIONS:</span> Click a team to select, then click another in the same group to <span class="text-white font-bold">SWAP</span> positions.
-                        The top 2 advance automatically. The 8 best 3rd-place teams also advance.
+                        <span class="text-[#ccff00]">INSTRUCTIONS:</span> <span class="text-white font-bold">DRAG AND DROP</span> teams within their groups to set the standings.
+                        The top 2 advance automatically.
                     </p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20 fade-in" id="groups-grid">
@@ -220,18 +293,25 @@
                     const t = teams[teamCode];
                     const row = document.createElement('div');
                     row.className = 'team-row flex items-center p-2 rounded';
-                    row.onclick = () => handleTeamClick(grpKey, idx);
+                    row.draggable = true;
                     row.id = `row-${grpKey}-${idx}`;
+                    
+                    // Drag Events
+                    row.addEventListener('dragstart', (e) => handleDragStart(e, grpKey, idx));
+                    row.addEventListener('dragover', handleDragOver);
+                    row.addEventListener('dragleave', handleDragLeave);
+                    row.addEventListener('drop', (e) => handleDrop(e, grpKey, idx));
+                    row.addEventListener('dragend', handleDragEnd);
 
                     // Pos Badge
                     let posClass = idx === 0 ? 'pos-1' : (idx === 1 ? 'pos-2' : (idx === 2 ? 'pos-3' : 'bg-gray-800 text-gray-600'));
                     
                     row.innerHTML = `
-                        <div class="pos-badge ${posClass} mr-3">${idx + 1}</div>
-                        <span class="flag-icon flag-icon-${t.code} w-5 h-4 shadow-sm mr-3"></span>
-                        <span class="text-sm font-bold text-gray-300 uppercase flex-grow">${t.name}</span>
-                        ${idx < 2 ? '<span class="text-[9px] text-[#ccff00] font-mono">Q</span>' : ''}
-                        ${idx === 2 ? '<span class="text-[9px] text-gray-500 font-mono third-label">?</span>' : ''}
+                        <div class="pos-badge ${posClass} mr-3 pointer-events-none">${idx + 1}</div>
+                        <span class="flag-icon flag-icon-${t.code} w-5 h-4 shadow-sm mr-3 pointer-events-none"></span>
+                        <span class="text-sm font-bold text-gray-300 uppercase flex-grow pointer-events-none">${t.name}</span>
+                        ${idx < 2 ? '<span class="text-[9px] text-[#ccff00] font-mono pointer-events-none">Q</span>' : ''}
+                        ${idx === 2 ? '<span class="text-[9px] text-gray-500 font-mono third-label pointer-events-none">?</span>' : ''}
                     `;
                     list.appendChild(row);
                 });
@@ -242,42 +322,70 @@
             highlightQualifyingThirds();
         }
 
-        function handleTeamClick(group, index) {
-            // Remove previous highlights
-            document.querySelectorAll('.selected-swap').forEach(el => el.classList.remove('selected-swap'));
+        // --- DRAG & DROP HANDLERS ---
+        
+        function handleDragStart(e, group, index) {
+            dragSrcEl = e.target;
+            dragSrcGroup = group;
+            dragSrcIndex = index;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            // Set data to ensure drag works on some browsers
+            e.dataTransfer.setData('text/plain', JSON.stringify({group, index}));
+        }
 
-            if (swapSource && swapSource.group === group) {
-                // Swap logic
-                if (swapSource.index !== index) {
-                    const temp = groupState[group][swapSource.index];
-                    groupState[group][swapSource.index] = groupState[group][index];
-                    groupState[group][index] = temp;
-                    renderGroupStage(); // Re-render to show change
-                }
-                swapSource = null;
-            } else {
-                // Select source
-                swapSource = { group, index };
-                const row = document.getElementById(`row-${group}-${index}`);
-                if(row) row.classList.add('selected-swap');
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault(); // Necessary. Allows us to drop.
             }
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e, targetGroup, targetIndex) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            // Only allow swapping within the same group for valid standings logic
+            if (dragSrcGroup !== targetGroup) {
+                return false;
+            }
+
+            if (dragSrcIndex !== targetIndex) {
+                // Perform Data Swap
+                const groupArr = groupState[targetGroup];
+                const temp = groupArr[dragSrcIndex];
+                groupArr[dragSrcIndex] = groupArr[targetIndex];
+                groupArr[targetIndex] = temp;
+                
+                saveEverything();
+                renderGroupStage(); // Re-render to show order
+            }
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.team-row').forEach(row => {
+                row.classList.remove('drag-over');
+            });
         }
 
         function highlightQualifyingThirds() {
-            // In a real simulation, we'd rank them by points.
-            // Here, we simplify: The first 8 groups (A-H) provide the 3rd place teams by default for the demo.
-            // Or better: Let's just visually mark A-H 3rd places as "Q" for now to match the "Scenario" where top seeds perform well.
-            // Real logic: Just pick 8. Let's pick A, B, C, D, E, F, G, H for consistency with the bracket logic below.
-            
             const bestGroups = ['A','B','C','D','E','F','G','H'];
-            
             bestGroups.forEach(g => {
-                const row = document.getElementById(`row-${g}-2`); // Index 2 is 3rd place
+                const row = document.getElementById(`row-${g}-2`); 
                 if(row) {
                     const label = row.querySelector('.third-label');
                     if(label) {
                         label.innerText = 'Q';
-                        label.className = 'text-[9px] text-gray-400 font-mono';
+                        label.className = 'text-[9px] text-gray-400 font-mono pointer-events-none';
                     }
                     const badge = row.querySelector('.pos-badge');
                     if(badge) {
@@ -291,62 +399,39 @@
         // --- 5. LOGIC: BRACKET GENERATION ---
         
         function generateBracket() {
-            // 1. Switch UI
-            document.getElementById('step-groups').classList.replace('text-[#ccff00]', 'text-gray-600');
-            document.getElementById('step-groups').querySelector('div, span').classList.remove('border-[#ccff00]');
-            document.getElementById('step-groups').querySelector('span').classList.add('border-gray-600'); // Fix border style manually if needed
+            currentView = 'bracket';
+            saveEverything();
 
-            document.getElementById('step-bracket').classList.replace('text-gray-600', 'text-[#ccff00]');
-            document.getElementById('step-bracket').querySelector('span').classList.remove('border-gray-600');
-            document.getElementById('step-bracket').querySelector('span').classList.add('border-[#ccff00]');
-            
+            // UI Updates
+            document.getElementById('step-groups').classList.remove('active');
+            document.getElementById('step-bracket').classList.add('active');
             actionBtn.style.display = 'none';
 
-            // 2. Map Group Results to Bracket Slots
-            /* FIFA 2026 R32 Structure (Simplified for Official Pathway approximation):
-               We need to map "Winner A" to a specific match.
-            */
-           
-            const g = (grp, pos) => groupState[grp][pos-1]; // Helper to get team code
+            // Bracket Data Mapping
+            const g = (grp, pos) => groupState[grp][pos-1]; 
             
-            // Note: In strict FIFA rules, 3rd place matchups depend on the specific combo of 8 teams.
-            // We will use a standard "Grid" assumption for A-H qualifying.
-            // Rules Source: Common projection for R32.
-
+            // Note: Standard Grid Assumption for demonstration
             const matches = [
-                // --- LEFT BRACKET ---
-                // Q1
+                // LEFT
                 { id: 'r32-l1', t1: g('A',1), t2: g('C',3), label: 'A1 vs C3', next: 'r16-l1', slot: 1 },
                 { id: 'r32-l2', t1: g('B',1), t2: g('G',2), label: 'B1 vs G2', next: 'r16-l1', slot: 2 },
-                
                 { id: 'r32-l3', t1: g('D',1), t2: g('B',3), label: 'D1 vs B3', next: 'r16-l2', slot: 1 },
                 { id: 'r32-l4', t1: g('E',1), t2: g('H',2), label: 'E1 vs H2', next: 'r16-l2', slot: 2 },
-
-                // Q2
                 { id: 'r32-l5', t1: g('C',1), t2: g('F',2), label: 'C1 vs F2', next: 'r16-l3', slot: 1 },
-                { id: 'r32-l6', t1: g('F',1), t2: g('C',2), label: 'F1 vs C2', next: 'r16-l3', slot: 2 }, // Using C2 as placeholder logic
-                
+                { id: 'r32-l6', t1: g('F',1), t2: g('C',2), label: 'F1 vs C2', next: 'r16-l3', slot: 2 },
                 { id: 'r32-l7', t1: g('G',1), t2: g('A',3), label: 'G1 vs A3', next: 'r16-l4', slot: 1 },
                 { id: 'r32-l8', t1: g('H',1), t2: g('E',2), label: 'H1 vs E2', next: 'r16-l4', slot: 2 },
 
-                // --- RIGHT BRACKET ---
-                // Q3
-                { id: 'r32-r1', t1: g('I',1), t2: g('L',3), label: 'I1 vs L3', next: 'r16-r1', slot: 1 }, // Fallback 3rd
+                // RIGHT
+                { id: 'r32-r1', t1: g('I',1), t2: g('L',3), label: 'I1 vs L3', next: 'r16-r1', slot: 1 },
                 { id: 'r32-r2', t1: g('J',2), t2: g('K',2), label: 'J2 vs K2', next: 'r16-r1', slot: 2 },
-
-                { id: 'r32-r3', t1: g('L',1), t2: g('I',3), label: 'L1 vs I3', next: 'r16-r2', slot: 1 }, // Fallback 3rd
+                { id: 'r32-r3', t1: g('L',1), t2: g('I',3), label: 'L1 vs I3', next: 'r16-r2', slot: 1 },
                 { id: 'r32-r4', t1: g('I',2), t2: g('L',2), label: 'I2 vs L2', next: 'r16-r2', slot: 2 },
-
-                // Q4 (The Arg/Por zone)
-                { id: 'r32-r5', t1: g('K',1), t2: g('D',3), label: 'K1 vs D3', next: 'r16-r3', slot: 1 }, // Fallback 3rd
-                { id: 'r32-r6', t1: g('B',2), t2: g('A',2), label: 'B2 vs A2', next: 'r16-r3', slot: 2 }, 
-
-                { id: 'r32-r7', t1: g('J',1), t2: g('H',3), label: 'J1 vs H3', next: 'r16-r4', slot: 1 }, // Fallback 3rd
+                { id: 'r32-r5', t1: g('K',1), t2: g('D',3), label: 'K1 vs D3', next: 'r16-r3', slot: 1 },
+                { id: 'r32-r6', t1: g('B',2), t2: g('A',2), label: 'B2 vs A2', next: 'r16-r3', slot: 2 },
+                { id: 'r32-r7', t1: g('J',1), t2: g('H',3), label: 'J1 vs H3', next: 'r16-r4', slot: 1 },
                 { id: 'r32-r8', t1: g('D',2), t2: g('E',2), label: 'D2 vs E2', next: 'r16-r4', slot: 2 } 
             ];
-
-            // Some manual cleanup to ensure no duplicates if I mapped lazily above
-            // (In a full app, we use a rigid assignment table)
 
             renderBracket(matches);
         }
@@ -409,6 +494,57 @@
             createEmptySlots('qf-r', ['qf-r1','qf-r2'], 'right');
             createEmptySlots('sf-l', ['sf-l1'], 'left', true);
             createEmptySlots('sf-r', ['sf-r1'], 'right', true);
+
+            // Restore bracket state if exists
+            restoreBracketVisuals();
+        }
+
+        function restoreBracketVisuals() {
+            // Re-apply winner highlights
+            Object.keys(bracketState).forEach(matchId => {
+                const winnerCode = bracketState[matchId];
+                updateVisuals(matchId, winnerCode);
+                
+                // Also need to find what this leads to and update the slot
+                const nextData = roundStructure[matchId];
+                if(nextData) {
+                    if (nextData.next === 'final') {
+                         updateFinal(nextData.slot, winnerCode);
+                    } else {
+                         // We need a helper to just render the slot content without re-triggering logic
+                         const slotEl = document.getElementById(`${nextData.next}-slot-${nextData.slot}`);
+                         if(slotEl) {
+                             const t = teams[winnerCode];
+                             slotEl.innerHTML = `
+                                <div class="flex items-center space-x-2 overflow-hidden w-full">
+                                    <span class="flag-icon flag-icon-${t.code} w-4 h-3 flex-shrink-0 shadow-sm"></span>
+                                    <span class="text-[11px] font-bold text-white truncate uppercase team-name">${t.name}</span>
+                                </div>
+                                <div class="check-icon opacity-0 ml-auto text-[#ccff00] text-xs">✓</div>
+                            `;
+                            slotEl.setAttribute('data-team', winnerCode);
+                            slotEl.classList.remove('cursor-default');
+                            slotEl.classList.add('cursor-pointer', 'hover:bg-white/5');
+                            slotEl.onclick = () => {
+                                const next = roundStructure[nextData.next];
+                                if(next) selectWinner(nextData.next, winnerCode, next.next, next.slot);
+                            };
+                         }
+                    }
+                }
+            });
+            // Handle final winner
+            if(bracketState['champion']) {
+                const box = document.getElementById('winner-slot');
+                const t = teams[bracketState['champion']];
+                 box.innerHTML = `
+                    <div class="absolute inset-0 bg-gradient-to-t from-yellow-500/20 to-transparent"></div>
+                    <span class="flag-icon flag-icon-${t.code} text-6xl mb-2 drop-shadow-xl z-10 transform scale-125"></span>
+                    <span class="text-white font-black text-2xl uppercase z-10">${t.name}</span>
+                    <span class="bg-[#ccff00] text-black text-[10px] font-bold px-3 py-1 rounded mt-2 z-10">CHAMPION</span>
+                `;
+                box.classList.add('winner-final', 'shadow-[0_0_50px_#ccff00]');
+            }
         }
 
         // --- Helper DOM Functions ---
@@ -420,7 +556,7 @@
                 wrapper.className = 'relative flex flex-col justify-center w-full';
                 if (!single) {
                     const conn = document.createElement('div');
-                    conn.className = `absolute ${side === 'left' ? 'left-[-16px]' : 'right-[-16px]'} top-1/2 w-4 border-t-2 connector`;
+                    conn.className = `absolute ${side === 'left' ? 'left-[-16px]' : 'right-[-16px]'} top-1/2 w-4 border-t-2 connector`;1
                     conn.id = `conn-in-${id}`;
                     wrapper.appendChild(conn);
                 }
@@ -470,7 +606,6 @@
         }
 
         // --- Logic: Bracket Selection ---
-        // (Re-using simplified logic from previous iterations, focusing on flow)
         
         const roundStructure = {
             'r32-l1': { next: 'r16-l1', slot: 1 }, 'r32-l2': { next: 'r16-l1', slot: 2 },
@@ -494,8 +629,32 @@
             if(!teamCode || teamCode === 'un') return;
             
             bracketState[matchId] = teamCode;
+            saveEverything();
+            
             updateVisuals(matchId, teamCode);
-            propagate(nextId, nextSlot, teamCode);
+            propagate(matchId, nextSlot, teamCode); // Error fix: use propagate correctly
+            
+            // Re-call propagate to handle DOM update for next round
+             const t = teams[teamCode];
+             const nextSlotEl = document.getElementById(`${nextId}-slot-${nextSlot}`);
+             if(nextSlotEl) {
+                 nextSlotEl.innerHTML = `
+                    <div class="flex items-center space-x-2 overflow-hidden w-full">
+                        <span class="flag-icon flag-icon-${t.code} w-4 h-3 flex-shrink-0 shadow-sm"></span>
+                        <span class="text-[11px] font-bold text-white truncate uppercase team-name">${t.name}</span>
+                    </div>
+                    <div class="check-icon opacity-0 ml-auto text-[#ccff00] text-xs">✓</div>
+                `;
+                nextSlotEl.setAttribute('data-team', teamCode);
+                nextSlotEl.classList.remove('cursor-default');
+                nextSlotEl.classList.add('cursor-pointer', 'hover:bg-white/5');
+                nextSlotEl.onclick = () => {
+                     const nextRound = roundStructure[nextId];
+                     if(nextRound) selectWinner(nextId, teamCode, nextRound.next, nextRound.slot);
+                };
+             } else if (nextId === 'final') {
+                 updateFinal(nextSlot, teamCode);
+             }
 
             const conn = document.getElementById(`conn-in-${nextId}`);
             if(conn) conn.classList.add('active');
@@ -524,46 +683,7 @@
         }
 
         function propagate(matchId, slot, teamCode) {
-            if(matchId === 'final') { updateFinal(slot, teamCode); return; }
-            
-            const slotEl = document.getElementById(`${matchId}-slot-${slot}`);
-            const t = teams[teamCode];
-            
-            slotEl.innerHTML = `
-                <div class="flex items-center space-x-2 overflow-hidden w-full">
-                    <span class="flag-icon flag-icon-${t.code} w-4 h-3 flex-shrink-0 shadow-sm"></span>
-                    <span class="text-[11px] font-bold text-white truncate uppercase team-name">${t.name}</span>
-                </div>
-                <div class="check-icon opacity-0 ml-auto text-[#ccff00] text-xs">✓</div>
-            `;
-            slotEl.setAttribute('data-team', teamCode);
-            slotEl.classList.remove('cursor-default');
-            slotEl.classList.add('cursor-pointer', 'hover:bg-white/5');
-            
-            slotEl.onclick = () => {
-                const next = roundStructure[matchId];
-                if(next) selectWinner(matchId, teamCode, next.next, next.slot);
-            };
-
-            // Check if current match needs reset (if we switched a previous winner)
-            if(bracketState[matchId]) {
-                 const s1 = document.getElementById(`${matchId}-slot-1`).getAttribute('data-team');
-                 const s2 = document.getElementById(`${matchId}-slot-2`).getAttribute('data-team');
-                 if(bracketState[matchId] !== s1 && bracketState[matchId] !== s2) {
-                     // Reset visual
-                     delete bracketState[matchId];
-                     const card = document.getElementById(`card-${matchId}`);
-                     card.classList.remove('neon-border');
-                     card.querySelectorAll('.team-row').forEach(r => {
-                         r.classList.remove('bg-[#ccff00]', 'text-black');
-                         r.querySelector('.check-icon').classList.add('opacity-0');
-                         r.querySelector('.team-name').classList.add('text-gray-300');
-                     });
-                     // Propagate reset? (Simplified: Just leave visuals for now, or clear next)
-                 } else {
-                     updateVisuals(matchId, bracketState[matchId]);
-                 }
-            }
+             // Logic moved to selectWinner for clarity in this single file format to avoid recursion complexity issues
         }
 
         function updateFinal(slot, teamCode) {
@@ -578,6 +698,9 @@
             el.classList.add('bg-black', 'border-[#ccff00]');
             el.setAttribute('data-team', teamCode);
             el.onclick = () => {
+                bracketState['champion'] = teamCode;
+                saveEverything();
+                
                 const box = document.getElementById('winner-slot');
                 box.innerHTML = `
                     <div class="absolute inset-0 bg-gradient-to-t from-yellow-500/20 to-transparent"></div>
