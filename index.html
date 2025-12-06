@@ -88,6 +88,16 @@
 
     <!-- Header -->
     <header class="text-center mb-6 z-10 relative px-4 w-full">
+        <!-- Tools (Reset/Undo) -->
+        <div class="absolute top-0 right-4 flex space-x-2 mt-2">
+            <button onclick="undoLastAction()" id="undo-btn" class="text-gray-500 hover:text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 border border-gray-800 rounded hover:border-gray-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                Undo
+            </button>
+            <button onclick="showResetModal()" class="text-red-500 hover:text-red-400 text-[10px] font-bold uppercase tracking-wider px-3 py-1 border border-gray-800 rounded hover:border-red-900 transition-colors">
+                Reset
+            </button>
+        </div>
+
         <h2 class="text-xs md:text-sm font-bold tracking-[0.3em] text-gray-500 uppercase mb-2">FIFA World Cup 2026™</h2>
         <h1 class="text-2xl md:text-4xl font-black text-white mb-2 italic">TOURNAMENT <span class="text-[#ccff00]">SIMULATOR</span></h1>
         
@@ -120,6 +130,18 @@
             <span>GENERATE BRACKET</span>
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
         </button>
+    </div>
+
+    <!-- Reset Modal -->
+    <div id="reset-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center">
+        <div class="bg-gray-900 border border-gray-700 p-6 rounded-xl max-w-sm w-full mx-4 text-center shadow-2xl">
+            <h3 class="text-white font-bold text-lg mb-2">Reset Tournament?</h3>
+            <p class="text-gray-400 text-sm mb-6">This will clear all your predictions and return to the default start.</p>
+            <div class="flex space-x-3 justify-center">
+                <button onclick="hideResetModal()" class="px-4 py-2 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs font-bold transition-colors">CANCEL</button>
+                <button onclick="confirmReset()" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-500 text-xs font-bold transition-colors shadow-lg shadow-red-900/50">CONFIRM RESET</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -200,6 +222,7 @@
         let groupState = {};
         let bracketState = {}; 
         let currentView = 'groups'; // 'groups' or 'bracket'
+        let historyStack = []; // For Undo functionality
 
         // Load or Init
         function loadState() {
@@ -220,6 +243,8 @@
             if (savedView) {
                 currentView = savedView;
             }
+            
+            updateUndoButton();
         }
 
         function saveEverything() {
@@ -233,7 +258,75 @@
             setTimeout(() => { status.style.opacity = '0'; }, 1000);
         }
 
-        // --- 3. INIT ---
+        // --- 3. HISTORY (UNDO) SYSTEM ---
+
+        function pushHistory() {
+            const snapshot = {
+                groups: JSON.parse(JSON.stringify(groupState)),
+                bracket: JSON.parse(JSON.stringify(bracketState)),
+                view: currentView
+            };
+            historyStack.push(JSON.stringify(snapshot));
+            if(historyStack.length > 50) historyStack.shift(); // Limit stack
+            updateUndoButton();
+        }
+
+        function undoLastAction() {
+            if (historyStack.length === 0) return;
+            
+            const prevJSON = historyStack.pop();
+            const prevState = JSON.parse(prevJSON);
+            
+            groupState = prevState.groups;
+            bracketState = prevState.bracket;
+            // We typically stay on current view unless the undo forces a switch, 
+            // but for simplicity let's stay on current view if possible to keep context
+            // actually, if we undo a "Generate Bracket" action, we might want to go back?
+            // For now, let's just restore data and re-render current view.
+            
+            saveEverything();
+            updateUndoButton();
+            
+            if (currentView === 'groups') {
+                renderGroupStage();
+            } else {
+                renderBracket(getBracketMatches()); // Re-calc matches based on restored groups
+            }
+        }
+
+        function updateUndoButton() {
+            const btn = document.getElementById('undo-btn');
+            btn.disabled = historyStack.length === 0;
+            btn.innerHTML = `UNDO ${historyStack.length > 0 ? '(' + historyStack.length + ')' : ''}`;
+        }
+
+        // --- 4. RESET SYSTEM ---
+
+        function showResetModal() {
+            document.getElementById('reset-modal').classList.remove('hidden');
+        }
+
+        function hideResetModal() {
+            document.getElementById('reset-modal').classList.add('hidden');
+        }
+
+        function confirmReset() {
+            localStorage.removeItem('wc26_groups');
+            localStorage.removeItem('wc26_bracket');
+            localStorage.removeItem('wc26_view');
+            
+            groupState = JSON.parse(JSON.stringify(defaultGroupState));
+            bracketState = {};
+            currentView = 'groups';
+            historyStack = [];
+            
+            hideResetModal();
+            switchToGroups();
+            updateUndoButton();
+        }
+
+
+        // --- 5. INIT & VIEW SWITCHING ---
         const contentDiv = document.getElementById('app-content');
         const actionBtn = document.getElementById('action-btn');
 
@@ -259,7 +352,7 @@
             renderGroupStage();
         }
 
-        // --- 4. VIEW: GROUP STAGE (Drag & Drop) ---
+        // --- 6. VIEW: GROUP STAGE (Drag & Drop) ---
         
         let dragSrcEl = null;
         let dragSrcGroup = null;
@@ -330,13 +423,12 @@
             dragSrcIndex = index;
             e.target.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
-            // Set data to ensure drag works on some browsers
             e.dataTransfer.setData('text/plain', JSON.stringify({group, index}));
         }
 
         function handleDragOver(e) {
             if (e.preventDefault) {
-                e.preventDefault(); // Necessary. Allows us to drop.
+                e.preventDefault(); 
             }
             e.dataTransfer.dropEffect = 'move';
             this.classList.add('drag-over');
@@ -352,12 +444,14 @@
                 e.stopPropagation();
             }
             
-            // Only allow swapping within the same group for valid standings logic
             if (dragSrcGroup !== targetGroup) {
                 return false;
             }
 
             if (dragSrcIndex !== targetIndex) {
+                // PUSH HISTORY BEFORE ACTION
+                pushHistory();
+
                 // Perform Data Swap
                 const groupArr = groupState[targetGroup];
                 const temp = groupArr[dragSrcIndex];
@@ -365,7 +459,7 @@
                 groupArr[targetIndex] = temp;
                 
                 saveEverything();
-                renderGroupStage(); // Re-render to show order
+                renderGroupStage(); 
             }
             return false;
         }
@@ -396,22 +490,11 @@
             });
         }
 
-        // --- 5. LOGIC: BRACKET GENERATION ---
+        // --- 7. LOGIC: BRACKET GENERATION ---
         
-        function generateBracket() {
-            currentView = 'bracket';
-            saveEverything();
-
-            // UI Updates
-            document.getElementById('step-groups').classList.remove('active');
-            document.getElementById('step-bracket').classList.add('active');
-            actionBtn.style.display = 'none';
-
-            // Bracket Data Mapping
+        function getBracketMatches() {
             const g = (grp, pos) => groupState[grp][pos-1]; 
-            
-            // Note: Standard Grid Assumption for demonstration
-            const matches = [
+            return [
                 // LEFT
                 { id: 'r32-l1', t1: g('A',1), t2: g('C',3), label: 'A1 vs C3', next: 'r16-l1', slot: 1 },
                 { id: 'r32-l2', t1: g('B',1), t2: g('G',2), label: 'B1 vs G2', next: 'r16-l1', slot: 2 },
@@ -432,11 +515,21 @@
                 { id: 'r32-r7', t1: g('J',1), t2: g('H',3), label: 'J1 vs H3', next: 'r16-r4', slot: 1 },
                 { id: 'r32-r8', t1: g('D',2), t2: g('E',2), label: 'D2 vs E2', next: 'r16-r4', slot: 2 } 
             ];
-
-            renderBracket(matches);
         }
 
-        // --- 6. VIEW: BRACKET ---
+        function generateBracket() {
+            currentView = 'bracket';
+            saveEverything();
+
+            // UI Updates
+            document.getElementById('step-groups').classList.remove('active');
+            document.getElementById('step-bracket').classList.add('active');
+            actionBtn.style.display = 'none';
+
+            renderBracket(getBracketMatches());
+        }
+
+        // --- 8. VIEW: BRACKET ---
         function renderBracket(matches) {
             contentDiv.innerHTML = `
                 <div class="w-full overflow-x-auto no-scrollbar pb-20 flex justify-center fade-in">
@@ -628,13 +721,15 @@
         function selectWinner(matchId, teamCode, nextId, nextSlot) {
             if(!teamCode || teamCode === 'un') return;
             
+            // PUSH HISTORY BEFORE CHANGE
+            pushHistory();
+
             bracketState[matchId] = teamCode;
             saveEverything();
             
             updateVisuals(matchId, teamCode);
-            propagate(matchId, nextSlot, teamCode); // Error fix: use propagate correctly
+            propagate(matchId, nextSlot, teamCode); 
             
-            // Re-call propagate to handle DOM update for next round
              const t = teams[teamCode];
              const nextSlotEl = document.getElementById(`${nextId}-slot-${nextSlot}`);
              if(nextSlotEl) {
@@ -683,7 +778,7 @@
         }
 
         function propagate(matchId, slot, teamCode) {
-             // Logic moved to selectWinner for clarity in this single file format to avoid recursion complexity issues
+             // Logic moved to selectWinner for clarity
         }
 
         function updateFinal(slot, teamCode) {
@@ -698,6 +793,9 @@
             el.classList.add('bg-black', 'border-[#ccff00]');
             el.setAttribute('data-team', teamCode);
             el.onclick = () => {
+                // PUSH HISTORY
+                pushHistory();
+
                 bracketState['champion'] = teamCode;
                 saveEverything();
                 
