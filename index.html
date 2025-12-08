@@ -647,30 +647,31 @@
         function renderBracket(matches) {
             contentDiv.innerHTML = `
                 <div id="bracket-scroller" class="w-full overflow-x-auto no-scrollbar pb-20 block fade-in">
-                    <div class="min-w-[1600px] flex justify-center items-start relative py-4 mx-auto pt-12">
+                    <!-- Changed min-w-[1600px] to min-w-max to ensure full width without shrinking columns -->
+                    <div class="min-w-max flex justify-center items-start relative py-4 mx-auto pt-12 px-4">
 
                         <!-- ================= LEFT SIDE ================= -->
 
                         <!-- R32 Column -->
-                        <div class="flex flex-col items-center mr-2">
+                        <div class="flex flex-col items-center mr-2 flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Round of 32</h3>
                             <div class="flex flex-col justify-around h-[1000px] w-48 space-y-3" id="r32-left"></div>
                         </div>
 
                         <!-- R16 Column -->
-                        <div class="flex flex-col items-center mr-4">
+                        <div class="flex flex-col items-center mr-4 flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Round of 16</h3>
                             <div class="flex flex-col justify-around h-[1000px] w-44" id="r16-l"></div>
                         </div>
 
                         <!-- QF Column -->
-                        <div class="flex flex-col items-center mr-4">
+                        <div class="flex flex-col items-center mr-4 flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Quarter Final</h3>
                             <div class="flex flex-col justify-around h-[1000px] w-44" id="qf-l"></div>
                         </div>
 
                         <!-- SF Column -->
-                        <div class="flex flex-col items-center mr-6 relative">
+                        <div class="flex flex-col items-center mr-6 relative flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Semi Final</h3>
                             <div class="flex flex-col justify-center h-[1000px] w-44 relative" id="sf-l">
                                 <div class="absolute right-[-24px] top-1/2 w-6 border-t-2 connector"></div>
@@ -680,7 +681,7 @@
 
                         <!-- ================= CENTER ================= -->
 
-                        <div class="flex flex-col justify-center items-center h-[1000px] w-64 z-20 mt-8"> <!-- Added mt-8 to align visually with columns -->
+                        <div class="flex flex-col justify-center items-center h-[1000px] w-64 z-20 mt-8 flex-shrink-0">
                             <div class="mb-8 w-full transform scale-110">
                                 <div class="text-center text-gray-500 mb-2 font-bold tracking-widest text-xs">WORLD CHAMPION</div>
                                 <div id="winner-slot" class="w-40 h-40 mx-auto neon-box bg-gray-900 rounded-lg flex flex-col items-center justify-center transition-all duration-500 relative overflow-hidden">
@@ -703,7 +704,7 @@
                         <!-- ================= RIGHT SIDE ================= -->
 
                         <!-- SF Column -->
-                        <div class="flex flex-col items-center ml-6 relative">
+                        <div class="flex flex-col items-center ml-6 relative flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Semi Final</h3>
                             <div class="flex flex-col justify-center h-[1000px] w-44 relative" id="sf-r">
                                 <div class="absolute left-[-24px] top-1/2 w-6 border-t-2 connector"></div>
@@ -711,19 +712,19 @@
                         </div>
 
                         <!-- QF Column -->
-                        <div class="flex flex-col items-center ml-4">
+                        <div class="flex flex-col items-center ml-4 flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Quarter Final</h3>
                             <div class="flex flex-col justify-around h-[1000px] w-44" id="qf-r"></div>
                         </div>
 
                         <!-- R16 Column -->
-                        <div class="flex flex-col items-center ml-4">
+                        <div class="flex flex-col items-center ml-4 flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Round of 16</h3>
                             <div class="flex flex-col justify-around h-[1000px] w-44" id="r16-r"></div>
                         </div>
 
                         <!-- R32 Column -->
-                        <div class="flex flex-col items-center ml-2">
+                        <div class="flex flex-col items-center ml-2 flex-shrink-0">
                             <h3 class="text-gray-500 text-[10px] font-bold tracking-widest uppercase mb-4">Round of 32</h3>
                             <div class="flex flex-col justify-around h-[1000px] w-48 space-y-3" id="r32-right"></div>
                         </div>
