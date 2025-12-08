@@ -646,8 +646,8 @@
         // --- 8. VIEW: BRACKET ---
         function renderBracket(matches) {
             contentDiv.innerHTML = `
-                <div class="w-full overflow-x-auto no-scrollbar pb-20 flex justify-center fade-in">
-                    <div class="min-w-[1600px] flex justify-center items-center relative py-4">
+                <div id="bracket-scroller" class="w-full overflow-x-auto no-scrollbar pb-20 block fade-in">
+                    <div class="min-w-[1600px] flex justify-center items-center relative py-4 mx-auto">
                         <!-- Left -->
                         <div class="flex flex-col justify-around h-[1000px] w-48 mr-2 space-y-3" id="r32-left"></div>
                         <div class="flex flex-col justify-around h-[1000px] w-44 mr-4" id="r16-l"></div>
@@ -704,6 +704,15 @@
 
             // Restore bracket state if exists
             restoreBracketVisuals();
+
+            // Auto-scroll to center (Fix for Mobile Viewport centering)
+            setTimeout(() => {
+                const scroller = document.getElementById('bracket-scroller');
+                if(scroller) {
+                    // Center the scroll view
+                    scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
+                }
+            }, 50);
         }
 
         function restoreBracketVisuals() {
