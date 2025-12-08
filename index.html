@@ -534,7 +534,7 @@
             // FIX for iOS/Mobile Safari:
             // Do NOT set JSON in text/plain, as Safari treats failed drops as "Search for this text"
             // Use a dummy string or rely on global variables (dragSrcGroup/dragSrcIndex)
-            e.dataTransfer.setData('text/plain', 'wc-team-swap');
+            e.dataTransfer.setData('application/x-wc-token', '1');
         }
 
         function handleDragOver(e) {
@@ -551,6 +551,9 @@
         }
 
         function handleDrop(e, targetGroup, targetIndex) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
             if (e.stopPropagation) {
                 e.stopPropagation();
             }
