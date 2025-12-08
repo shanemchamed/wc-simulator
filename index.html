@@ -7,6 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.5.0/css/flag-icon.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script type="text/javascript">
+        (function(){
+            emailjs.init("6Ma4qUlfZK1talrWN");
+        })();
+    </script>
     <style>
         body {
             font-family: 'Montserrat', sans-serif;
@@ -326,6 +332,7 @@
             localStorage.removeItem('wc26_groups');
             localStorage.removeItem('wc26_bracket');
             localStorage.removeItem('wc26_view');
+            //localStorage.removeItem('wc26_visitor_notified'); // Also reset notification so you can test it again
             
             groupState = JSON.parse(JSON.stringify(defaultGroupState));
             bracketState = {};
@@ -335,6 +342,8 @@
             hideResetModal();
             switchToGroups();
             updateUndoButton();
+            // Re-check notification since we cleared it
+            checkVisitorNotification();
         }
 
 
@@ -344,10 +353,51 @@
 
         function init() {
             loadState();
+            checkVisitorNotification(); // Check on init
             if (currentView === 'bracket') {
                 generateBracket(); // This renders the bracket view
             } else {
                 switchToGroups(); // This renders the group view
+            }
+        }
+
+        // --- 9. NOTIFICATION SYSTEM (Placeholder) ---
+        async function checkVisitorNotification() {
+            // Check if we have already sent a notification for this user (browser)
+            const notified = localStorage.getItem('wc26_visitor_notified');
+
+            if (!notified) {
+                console.log("New Visitor Detected: Triggering Notification...");
+                // 1. Get Time
+                const visitTime = new Date().toLocaleString();
+
+                // 2. Get IP Address (using free public API)
+                let userIp = "Unknown";
+                try {
+                    const res = await fetch('https://api.ipify.org?format=json');
+                    const data = await res.json();
+                    userIp = data.ip;
+                } catch (e) {
+                    console.log("Could not fetch IP:", e);
+                }
+
+                emailjs.send("service_grj1uif", "template_axhlyzy", {
+                    to_name: "Shaheen",
+                    time: visitTime,
+                    ip: userIp,
+                    message: "Someone accessed the World Cup Simulator!"
+                }).then(
+                    function(response) {
+                        console.log("SUCCESS!", response.status, response.text);
+                        // Only mark as notified if email sent successfully
+                        localStorage.setItem('wc26_visitor_notified', 'true');
+                    },
+                    function(error) {
+                        console.log("FAILED...", error);
+                    }
+                );
+
+                localStorage.setItem('wc26_visitor_notified', 'true');
             }
         }
 
