@@ -14,18 +14,8 @@
         })();
     </script>
 
-    <!-- Mobile Drag & Drop Polyfill (Essential for iOS Safari) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/default.css">
-    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mobile-drag-drop@2.3.0-rc.2/scroll-behaviour.min.js"></script>
-    <script>
-        // Apply polyfill
-        MobileDragDrop.polyfill({
-            dragImageTranslateOverride: MobileDragDrop.scrollBehaviourDragImageTranslateOverride
-        });
-        // Safari touch fix
-        window.addEventListener('touchmove', function() {}, {passive: false});
-    </script>
+    <!-- SortableJS for reliable Drag & Drop on Mobile and Desktop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
     <style>
         body {
@@ -56,21 +46,17 @@
 
         .team-row {
             cursor: grab; /* Drag cursor */
-            transition: all 0.2s;
-            touch-action: none; /* Helps with touch dragging */
+            /* Removed touch-action: none to allow smooth mobile scrolling, SortableJS handles it */
+            transition: background-color 0.2s, opacity 0.2s; 
         }
         .team-row:active { cursor: grabbing; }
         .team-row:hover { background: rgba(255,255,255,0.05); }
         
-        /* Drag & Drop Visuals */
+        /* Drag & Drop Visuals (SortableJS Ghost Class) */
         .team-row.dragging {
             opacity: 0.5;
             background: #333;
             border: 1px dashed #666;
-        }
-        .team-row.drag-over {
-            background: rgba(204, 255, 0, 0.1);
-            border-top: 2px solid #ccff00;
         }
 
         .pos-badge {
@@ -222,7 +208,6 @@
         let FIFA_LOOKUP_TABLE = {}; // Cache for the 495 matrices
 
         function loadState() {
-            // Version 22 to cleanly reset local storage back to the PDF logic
             const savedGroups = localStorage.getItem('wc26_groups_v22');
             const savedBracket = localStorage.getItem('wc26_bracket_v22');
             const savedThirds = localStorage.getItem('wc26_thirds_v22');
@@ -345,7 +330,6 @@
         }
 
         // --- 6. VIEW: GROUP STAGE & THIRD PLACE SELECTION ---
-        let dragSrcEl = null; let dragSrcGroup = null; let dragSrcIndex = null;
 
         function renderGroupStage() {
             const allSelected = selectedThirds.length === 8;
@@ -379,15 +363,8 @@
                     const t = teams[teamCode] || {name: 'Unknown', code: 'un'};
                     const row = document.createElement('div');
                     row.className = 'team-row flex items-center p-2 rounded';
-                    row.draggable = true;
                     row.id = `row-${grpKey}-${idx}`;
                     
-                    row.addEventListener('dragstart', (e) => handleDragStart(e, grpKey, idx));
-                    row.addEventListener('dragover', handleDragOver);
-                    row.addEventListener('dragleave', handleDragLeave);
-                    row.addEventListener('drop', (e) => handleDrop(e, grpKey, idx));
-                    row.addEventListener('dragend', handleDragEnd);
-
                     const isThirdSelected = (idx === 2 && selectedThirds.includes(grpKey));
                     
                     let posClass = idx === 0 ? 'pos-1' : (idx === 1 ? 'pos-2' : (idx === 2 ? 'pos-3' : 'bg-gray-800 text-gray-600'));
@@ -414,6 +391,31 @@
                 });
                 grpDiv.appendChild(list);
                 grid.appendChild(grpDiv);
+
+                // Initialize SortableJS for flawless mobile and desktop drag and drop
+                new Sortable(list, {
+                    animation: 150,
+                    delay: 150, // Delay to allow normal page scrolling on mobile
+                    delayOnTouchOnly: true, // Only apply delay on touch screens
+                    ghostClass: 'dragging', // Reuse existing CSS class for visual feedback
+                    filter: 'button', // Ignore clicks on the [?] button
+                    preventOnFilter: false,
+                    onEnd: function (evt) {
+                        if (evt.oldIndex === evt.newIndex) return;
+                        
+                        pushHistory();
+                        
+                        // Shift array (splice and insert)
+                        const groupArr = groupState[grpKey];
+                        const movedItem = groupArr.splice(evt.oldIndex, 1)[0];
+                        groupArr.splice(evt.newIndex, 0, movedItem);
+                        
+                        // Reset bracket when groups change
+                        bracketState = {}; 
+                        saveEverything();
+                        renderGroupStage(); 
+                    }
+                });
             });
             
             // Show/Hide Bracket Button based on exactly 8 selected
@@ -446,51 +448,6 @@
                 saveEverything();
                 renderGroupStage();
             }
-        }
-
-        // --- DRAG & DROP HANDLERS ---
-        function handleDragStart(e, group, index) {
-            dragSrcEl = e.target;
-            dragSrcGroup = group;
-            dragSrcIndex = index;
-            e.target.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('application/x-wc-token', '1');
-        }
-
-        function handleDragOver(e) {
-            if (e.preventDefault) e.preventDefault(); 
-            e.dataTransfer.dropEffect = 'move';
-            this.classList.add('drag-over');
-            return false;
-        }
-
-        function handleDragLeave(e) { this.classList.remove('drag-over'); }
-
-        function handleDrop(e, targetGroup, targetIndex) {
-            if (e.preventDefault) e.preventDefault();
-            if (e.stopPropagation) e.stopPropagation();
-            
-            if (dragSrcGroup !== targetGroup) return false;
-
-            if (dragSrcIndex !== targetIndex) {
-                pushHistory();
-                const groupArr = groupState[targetGroup];
-                const temp = groupArr[dragSrcIndex];
-                groupArr[dragSrcIndex] = groupArr[targetIndex];
-                groupArr[targetIndex] = temp;
-                
-                // If bracket was generated, switching group places should clear the bracket predictions
-                bracketState = {}; 
-                saveEverything();
-                renderGroupStage(); 
-            }
-            return false;
-        }
-
-        function handleDragEnd(e) {
-            this.classList.remove('dragging');
-            document.querySelectorAll('.team-row').forEach(row => row.classList.remove('drag-over'));
         }
 
         // --- 7. LOGIC: DYNAMIC BRACKET ASSIGNMENT ---
