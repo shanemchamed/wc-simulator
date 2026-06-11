@@ -173,7 +173,7 @@
                 <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
                 @shaheenmohamed.m
             </a>
-            <div class="mt-2 text-[8px] text-gray-600 font-mono text-right">v1.9</div>
+            <div class="mt-2 text-[8px] text-gray-600 font-mono text-right">v2.2</div>
         </div>
     </div>
 
@@ -222,11 +222,11 @@
         let FIFA_LOOKUP_TABLE = {}; // Cache for the 495 matrices
 
         function loadState() {
-            // Version 19 to cleanly reset local storage to support the exact 495 combination lookup matrix
-            const savedGroups = localStorage.getItem('wc26_groups_v19');
-            const savedBracket = localStorage.getItem('wc26_bracket_v19');
-            const savedThirds = localStorage.getItem('wc26_thirds_v19');
-            const savedView = localStorage.getItem('wc26_view_v19');
+            // Version 22 to cleanly reset local storage back to the PDF logic
+            const savedGroups = localStorage.getItem('wc26_groups_v22');
+            const savedBracket = localStorage.getItem('wc26_bracket_v22');
+            const savedThirds = localStorage.getItem('wc26_thirds_v22');
+            const savedView = localStorage.getItem('wc26_view_v22');
 
             groupState = savedGroups ? JSON.parse(savedGroups) : JSON.parse(JSON.stringify(defaultGroupState));
             bracketState = savedBracket ? JSON.parse(savedBracket) : {};
@@ -237,10 +237,10 @@
         }
 
         function saveEverything() {
-            localStorage.setItem('wc26_groups_v19', JSON.stringify(groupState));
-            localStorage.setItem('wc26_bracket_v19', JSON.stringify(bracketState));
-            localStorage.setItem('wc26_thirds_v19', JSON.stringify(selectedThirds));
-            localStorage.setItem('wc26_view_v19', currentView);
+            localStorage.setItem('wc26_groups_v22', JSON.stringify(groupState));
+            localStorage.setItem('wc26_bracket_v22', JSON.stringify(bracketState));
+            localStorage.setItem('wc26_thirds_v22', JSON.stringify(selectedThirds));
+            localStorage.setItem('wc26_view_v22', currentView);
             
             const status = document.getElementById('save-status');
             if(status) {
@@ -291,10 +291,10 @@
         function hideResetModal() { document.getElementById('reset-modal').classList.add('hidden'); }
 
         function confirmReset() {
-            localStorage.removeItem('wc26_groups_v19');
-            localStorage.removeItem('wc26_bracket_v19');
-            localStorage.removeItem('wc26_thirds_v19');
-            localStorage.removeItem('wc26_view_v19');
+            localStorage.removeItem('wc26_groups_v22');
+            localStorage.removeItem('wc26_bracket_v22');
+            localStorage.removeItem('wc26_thirds_v22');
+            localStorage.removeItem('wc26_view_v22');
             
             groupState = JSON.parse(JSON.stringify(defaultGroupState));
             bracketState = {};
@@ -498,7 +498,8 @@
         // Generates the official 495 combinations and finds the deterministic lexicographical derangement for each
         function generateFIFATable() {
             const allGroups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-            const hostGroups = ['A','B','C','D','E','F','G','H'];
+            // Updated hosts based on official FIFA PDF schedule logic (A, B, D, E, G, I, K, L)
+            const hostGroups = ['A','B','D','E','G','I','K','L'];
             
             function getCombinations(array, k) {
                 let results = [];
@@ -545,16 +546,17 @@
             console.log(`FIFA Matrix Loaded: ${Object.keys(FIFA_LOOKUP_TABLE).length} Combinations calculated in memory.`);
         }
 
-        // This dynamically assigns the 8 selected 3rd place teams to the 8 Group Winners (A,B,C,D,E,F,G,H)
+        // This dynamically assigns the 8 selected 3rd place teams to the 8 Group Winners
         // using the exact deterministic FIFA rule mapped out in the 495-combination matrix.
         function assignThirds(selected) {
             const key = [...selected].sort().join('');
             const assignmentArray = FIFA_LOOKUP_TABLE[key];
-            const hosts = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+            const hosts = ['A','B','D','E','G','I','K','L'];
             let assignmentMap = {};
             
             // Fallback (mathematically unreachable since all 495 combos have derangements, but safe)
             if (!assignmentArray) {
+                console.warn('Fallback assignment triggered');
                 return hosts.reduce((acc, host, i) => ({...acc, [host]: selected[i]}), {});
             }
             
@@ -571,30 +573,31 @@
             // Dynamically assign which 3rd place team plays which 1st place team
             const thirdAssignments = assignThirds(selectedThirds);
             
-            // Helper to fetch the exact 3rd place team given the Host Group (A-H)
+            // Helper to fetch the exact 3rd place team given the Host Group
             const get3rd = (hostGrp) => g(thirdAssignments[hostGrp], 3); 
             const label3rd = (hostGrp) => `3${thirdAssignments[hostGrp]}`;
 
+            // Matches strictly mapped to the official PDF schedule paths
             return [
                 // LEFT
-                { id: 'r32-l1', t1: g('A',1), t2: get3rd('A'), label: `1A vs ${label3rd('A')}`, next: 'r16-l1', slot: 1 },
-                { id: 'r32-l2', t1: g('C',2), t2: g('D',2), label: '2C vs 2D', next: 'r16-l1', slot: 2 },
-                { id: 'r32-l3', t1: g('F',1), t2: get3rd('F'), label: `1F vs ${label3rd('F')}`, next: 'r16-l2', slot: 1 },
-                { id: 'r32-l4', t1: g('I',1), t2: g('K',2), label: '1I vs 2K', next: 'r16-l2', slot: 2 },
-                { id: 'r32-l5', t1: g('E',1), t2: get3rd('E'), label: `1E vs ${label3rd('E')}`, next: 'r16-l3', slot: 1 },
-                { id: 'r32-l6', t1: g('G',2), t2: g('H',2), label: '2G vs 2H', next: 'r16-l3', slot: 2 },
+                { id: 'r32-l1', t1: g('I',1), t2: get3rd('I'), label: `1I vs ${label3rd('I')}`, next: 'r16-l1', slot: 1 },
+                { id: 'r32-l2', t1: g('E',1), t2: get3rd('E'), label: `1E vs ${label3rd('E')}`, next: 'r16-l1', slot: 2 },
+                { id: 'r32-l3', t1: g('F',1), t2: g('C',2), label: '1F vs 2C', next: 'r16-l2', slot: 1 },
+                { id: 'r32-l4', t1: g('A',2), t2: g('B',2), label: '2A vs 2B', next: 'r16-l2', slot: 2 },
+                { id: 'r32-l5', t1: g('H',1), t2: g('J',2), label: '1H vs 2J', next: 'r16-l3', slot: 1 },
+                { id: 'r32-l6', t1: g('K',2), t2: g('L',2), label: '2K vs 2L', next: 'r16-l3', slot: 2 },
                 { id: 'r32-l7', t1: g('G',1), t2: get3rd('G'), label: `1G vs ${label3rd('G')}`, next: 'r16-l4', slot: 1 },
-                { id: 'r32-l8', t1: g('K',1), t2: g('I',2), label: '1K vs 2I', next: 'r16-l4', slot: 2 },
+                { id: 'r32-l8', t1: g('D',1), t2: get3rd('D'), label: `1D vs ${label3rd('D')}`, next: 'r16-l4', slot: 2 },
 
                 // RIGHT
-                { id: 'r32-r1', t1: g('B',1), t2: get3rd('B'), label: `1B vs ${label3rd('B')}`, next: 'r16-r1', slot: 1 },
-                { id: 'r32-r2', t1: g('E',2), t2: g('F',2), label: '2E vs 2F', next: 'r16-r1', slot: 2 },
-                { id: 'r32-r3', t1: g('C',1), t2: get3rd('C'), label: `1C vs ${label3rd('C')}`, next: 'r16-r2', slot: 1 },
-                { id: 'r32-r4', t1: g('J',1), t2: g('L',2), label: '1J vs 2L', next: 'r16-r2', slot: 2 },
-                { id: 'r32-r5', t1: g('D',1), t2: get3rd('D'), label: `1D vs ${label3rd('D')}`, next: 'r16-r3', slot: 1 },
-                { id: 'r32-r6', t1: g('A',2), t2: g('B',2), label: '2A vs 2B', next: 'r16-r3', slot: 2 },
-                { id: 'r32-r7', t1: g('H',1), t2: get3rd('H'), label: `1H vs ${label3rd('H')}`, next: 'r16-r4', slot: 1 },
-                { id: 'r32-r8', t1: g('L',1), t2: g('J',2), label: '1L vs 2J', next: 'r16-r4', slot: 2 } 
+                { id: 'r32-r1', t1: g('I',2), t2: g('E',2), label: '2I vs 2E', next: 'r16-r1', slot: 1 },
+                { id: 'r32-r2', t1: g('C',1), t2: g('F',2), label: '1C vs 2F', next: 'r16-r1', slot: 2 },
+                { id: 'r32-r3', t1: g('A',1), t2: get3rd('A'), label: `1A vs ${label3rd('A')}`, next: 'r16-r2', slot: 1 },
+                { id: 'r32-r4', t1: g('L',1), t2: get3rd('L'), label: `1L vs ${label3rd('L')}`, next: 'r16-r2', slot: 2 },
+                { id: 'r32-r5', t1: g('J',1), t2: g('H',2), label: '1J vs 2H', next: 'r16-r3', slot: 1 },
+                { id: 'r32-r6', t1: g('D',2), t2: g('G',2), label: '2D vs 2G', next: 'r16-r3', slot: 2 },
+                { id: 'r32-r7', t1: g('B',1), t2: get3rd('B'), label: `1B vs ${label3rd('B')}`, next: 'r16-r4', slot: 1 },
+                { id: 'r32-r8', t1: g('K',1), t2: get3rd('K'), label: `1K vs ${label3rd('K')}`, next: 'r16-r4', slot: 2 } 
             ];
         }
 
